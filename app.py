@@ -190,4 +190,3 @@ def generate(data: RequestData):
 @app.get("/health")
 def health():
     return {"status": "ok"}
-``
