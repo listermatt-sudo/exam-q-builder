@@ -66,31 +66,7 @@ def get_all_files():
 def get_papers():
 
     files = get_all_files()
-
-    months = set()
-    papers = set()
-
-    for item in files:
-        name = item.get("name", "")
-
-        if "_Q" not in name:
-            continue
-
-        paper_part = name.split("_Q")[0]
-        parts = paper_part.split()
-
-        if len(parts) >= 3:
-            month = parts[0]
-            year = parts[1]
-            paper = parts[2]
-
-            months.add(f"{month} 20{year}")
-            papers.add(paper)
-
-    return {
-        "months": sorted(months),
-        "papers": sorted(papers)
-    }
+    return {"raw": files}
 
 
 # ✅ Create Word file
