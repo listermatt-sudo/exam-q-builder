@@ -115,6 +115,13 @@ def get_structure():
 def create_word(entries, filename):
 
     doc = Document()
+
+# ✅ Set narrower margins (in inches)
+section = doc.sections[0]
+section.top_margin = 914400    # 0.64 inches
+section.bottom_margin = 914400
+section.left_margin = 914400
+section.right_margin = 914400()
     doc.add_heading("Skills Map Exam Practice", 0)
 
     for paper, q in entries:
