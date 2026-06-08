@@ -120,18 +120,7 @@ def build_structure(files):
 def get_structure():
 
     files = get_all_files()
-    structure = build_structure(files)
-
-    # Convert sets → sorted lists for JSON
-    clean = {
-        month: {
-            paper: sorted(list(qs))
-            for paper, qs in papers.items()
-        }
-        for month, papers in structure.items()
-    }
-
-    return clean
+    return {"debug": files}
 
 
 # ✅ Generate filename
