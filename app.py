@@ -173,4 +173,3 @@ def generate(data: RequestData):
 @app.get("/")
 def home():
     return {"message": "Worksheet Builder API is running"}
-``
