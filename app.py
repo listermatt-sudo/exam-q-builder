@@ -24,10 +24,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Supabase storage base URL
+# ✅ Supabase base URL
 BASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co/storage/v1/object/public/question-images"
 
-# ✅ All series
+# ✅ Your full dataset
 MONTHS = [
     "June 2025", "June 2024", "June 2023", "June 2022",
     "June 2019", "June 2018", "June 2017",
@@ -36,8 +36,10 @@ MONTHS = [
     "November 2019", "November 2018", "November 2017"
 ]
 
-# ✅ All papers
 PAPERS = ["1F", "2F", "3F", "1H", "2H", "3H"]
+
+# ✅ Cache (IMPORTANT)
+structure_cache = None
 
 
 # ✅ Request model
@@ -46,44 +48,58 @@ class RequestData(BaseModel):
     filetype: str
 
 
-# ✅ Build filename to match Supabase
+# ✅ Filename builder (matches your storage EXACTLY)
 def build_filename(month_year, paper, q):
     parts = month_year.split()
     month = parts[0]
     year = parts[1][-2:]
 
-    # ✅ Match your actual file naming
+    # ✅ Your files use "Nov"
     if month == "November":
         month = "Nov"
 
     return f"{month} {year} {paper}_Q{q}.png"
 
 
-# ✅ Detect real questions
+# ✅ ✅ Optimised question detection
 def get_valid_questions(month_year, paper):
 
     valid = []
+    misses = 0
 
-    for q in range(1, 25):  # adjust if needed
+    for q in range(1, 36):  # ✅ up to 35 questions
 
         filename = build_filename(month_year, paper, q)
         url = f"{BASE_URL}/{filename}"
 
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=3)
 
             if response.status_code == 200:
                 valid.append(q)
+                misses = 0  # reset miss counter
+            else:
+                misses += 1
 
         except:
-            continue
+            misses += 1
+
+        # ✅ STOP EARLY (huge speed improvement)
+        if misses >= 5 and q > 5:
+            break
 
     return valid
 
 
-# ✅ ✅ FINAL STRUCTURE ENDPOINT
+# ✅ ✅ STRUCTURE ENDPOINT (with caching)
 @app.get("/structure")
 def get_structure():
+
+    global structure_cache
+
+    # ✅ Return cached instantly
+    if structure_cache is not None:
+        return structure_cache
 
     structure = {}
 
@@ -101,10 +117,13 @@ def get_structure():
         if month_data:
             structure[month] = month_data
 
+    # ✅ Store result so it only computes once
+    structure_cache = structure
+
     return structure
 
 
-# ✅ Word generation
+# ✅ Word export
 def create_word(entries, filename):
 
     doc = Document()
@@ -114,7 +133,14 @@ def create_word(entries, filename):
 
         doc.add_heading(f"{paper} — Q{q}", level=1)
 
-        url = f"{BASE_URL}/{build_filename(paper.split()[0] + ' ' + paper.split()[1], paper.split()[-1], q)}"
+        # ✅ reconstruct filename
+        parts = paper.split()
+        month = parts[0]
+        year = parts[1]
+        paper_code = parts[2]
+
+        file_name = build_filename(f"{month} {year}", paper_code, q)
+        url = f"{BASE_URL}/{file_name}"
 
         response = requests.get(url)
 
@@ -126,7 +152,7 @@ def create_word(entries, filename):
     doc.save(filename)
 
 
-# ✅ PDF generation
+# ✅ PDF export
 def create_pdf(entries, filename):
 
     c = canvas.Canvas(filename, pagesize=A4)
@@ -135,7 +161,13 @@ def create_pdf(entries, filename):
 
     for paper, q in entries:
 
-        url = f"{BASE_URL}/{build_filename(paper.split()[0] + ' ' + paper.split()[1], paper.split()[-1], q)}"
+        parts = paper.split()
+        month = parts[0]
+        year = parts[1]
+        paper_code = parts[2]
+
+        file_name = build_filename(f"{month} {year}", paper_code, q)
+        url = f"{BASE_URL}/{file_name}"
 
         response = requests.get(url)
 
@@ -152,13 +184,9 @@ def create_pdf(entries, filename):
             c.showPage()
             y = height - 40
 
-        c.drawImage(
-            img_obj,
-            40,
-            y - new_h,
-            width=width - 80,
-            height=new_h
-        )
+        c.drawImage(img_obj, 40, y - new_h,
+                    width=width - 80,
+                    height=new_h)
 
         y -= new_h + 20
 
@@ -183,4 +211,3 @@ def generate(data: RequestData):
 @app.get("/")
 def home():
     return {"message": "Worksheet Builder API is running"}
-
