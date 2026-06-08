@@ -112,10 +112,18 @@ function addRow() {
     const div = document.createElement("div");
 
     div.innerHTML = `
+    <div style="display:flex; justify-content:center; gap:10px; font-weight:bold;">
+        <div style="width:150px;">Series</div>
+        <div style="width:150px;">Paper</div>
+        <div style="width:150px;">Question</div>
+    </div>
+
+    <div style="display:flex; justify-content:center; gap:10px;">
         <select class="month"></select>
         <select class="paper"></select>
         <select class="question"></select>
-    `;
+    </div>
+`;
 
     document.getElementById("rows").appendChild(div);
 
