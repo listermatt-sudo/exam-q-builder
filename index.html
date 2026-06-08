@@ -20,10 +20,29 @@
             box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
         }
 
-        select {
-            margin: 5px;
-            padding: 8px;
+        .row {
+            display: flex;
+            gap: 10px;
+            max-width: 480px;
+            margin: 5px auto;
+        }
+
+        .header-row {
+            display: flex;
+            gap: 10px;
+            max-width: 480px;
+            margin: 10px auto;
+            font-weight: bold;
+        }
+
+        .header-cell {
             width: 150px;
+            text-align: left;
+        }
+
+        select {
+            width: 150px;
+            padding: 8px;
         }
 
         button {
@@ -60,7 +79,14 @@
 <div class="container" id="app" style="display:none;">
     <h1>Skills Map Exam Practice Builder</h1>
 
-    <div id="rows">Loading data...</div>
+    <!-- ✅ SINGLE HEADER ROW -->
+    <div class="header-row">
+        <div class="header-cell">Month</div>
+        <div class="header-cell">Paper</div>
+        <div class="header-cell">Question</div>
+    </div>
+
+    <div id="rows">Loading...</div>
 
     <button onclick="addRow()">Add Row</button>
     <button onclick="generate()">Generate</button>
@@ -89,6 +115,7 @@ function login() {
 // ✅ Global structure
 let structure = {};
 
+
 // ✅ Load structure
 async function loadStructure() {
 
@@ -110,20 +137,13 @@ async function loadStructure() {
 function addRow() {
 
     const div = document.createElement("div");
+    div.className = "row";
 
     div.innerHTML = `
-    <div style="display:flex; justify-content:center; gap:10px; font-weight:bold;">
-        <div style="width:150px;">Series</div>
-        <div style="width:150px;">Paper</div>
-        <div style="width:150px;">Question</div>
-    </div>
-
-    <div style="display:flex; justify-content:center; gap:10px;">
         <select class="month"></select>
         <select class="paper"></select>
         <select class="question"></select>
-    </div>
-`;
+    `;
 
     document.getElementById("rows").appendChild(div);
 
@@ -131,17 +151,16 @@ function addRow() {
     const paperSelect = div.querySelector(".paper");
     const questionSelect = div.querySelector(".question");
 
-    // ✅ Populate months
+    // ✅ Months
     const months = Object.keys(structure).sort();
     monthSelect.innerHTML = months.map(m => `<option>${m}</option>`).join("");
 
-    // ✅ Update papers
+    // ✅ Papers
     function updatePapers() {
         const selectedMonth = monthSelect.value;
 
         let papers = Object.keys(structure[selectedMonth] || {});
 
-        // ✅ Sort correctly
         const order = ["1F","2F","3F","1H","2H","3H"];
         papers.sort((a, b) => order.indexOf(a) - order.indexOf(b));
 
@@ -150,7 +169,7 @@ function addRow() {
         updateQuestions();
     }
 
-    // ✅ Update questions
+    // ✅ Questions
     function updateQuestions() {
         const selectedMonth = monthSelect.value;
         const selectedPaper = paperSelect.value;
@@ -171,7 +190,7 @@ function addRow() {
 // ✅ Generate worksheet
 async function generate() {
 
-    const rows = document.querySelectorAll("#rows div");
+    const rows = document.querySelectorAll("#rows .row");
     let entries = [];
 
     rows.forEach(row => {
@@ -201,7 +220,7 @@ async function generate() {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
 
-        // ✅ Ask user for filename
+        // ✅ Ask for filename
         let filename = prompt(
             "Enter file name:",
             new Date().toISOString().slice(0,10) + "_exam practice"
