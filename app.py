@@ -15,7 +15,7 @@ from io import BytesIO
 # ✅ FastAPI app
 app = FastAPI()
 
-# ✅ Enable CORS (required for frontend)
+# ✅ Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,19 +31,30 @@ BUCKET = "question-images"
 
 BASE_URL = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}"
 
+# ✅ Month mapping
+MONTH_MAP = {
+    "Jan": "January",
+    "Feb": "February",
+    "Mar": "March",
+    "Apr": "April",
+    "May": "May",
+    "Jun": "June",
+    "Jul": "July",
+    "Aug": "August",
+    "Sep": "September",
+    "Oct": "October",
+    "Nov": "November",
+    "Dec": "December"
+}
 
-# ✅ Request format
+
+# ✅ Request model
 class RequestData(BaseModel):
     entries: list
     filetype: str
 
 
-# ✅ Build image filename
-def find_image(paper, q):
-    return f"{paper}_Q{q}.png"
-
-
-# ✅ Fetch file list from Supabase
+# ✅ Fetch all files from Supabase
 def get_all_files():
 
     url = f"{SUPABASE_URL}/storage/v1/object/list/{BUCKET}"
@@ -61,14 +72,10 @@ def get_all_files():
     return response.json()
 
 
-# ✅ Endpoint: get months + papers dynamically
-@app.get("/papers")
-def get_papers():
+# ✅ Build structured data
+def build_structure(files):
 
-    files = get_all_files()
-
-    months = set()
-    papers = set()
+    data = {}
 
     for item in files:
         name = item.get("name", "")
@@ -76,24 +83,63 @@ def get_papers():
         if "_Q" not in name:
             continue
 
-        paper_part = name.split("_Q")[0]
-        parts = paper_part.split()
+        try:
+            paper_part, q_part = name.replace(".png", "").split("_Q")
+            parts = paper_part.split()
 
-        if len(parts) >= 3:
-            month = parts[0]
+            if len(parts) < 3:
+                continue
+
+            raw_month = parts[0]
+            month = MONTH_MAP.get(raw_month, raw_month)
+
             year = parts[1]
             paper = parts[2]
 
-            months.add(f"{month} 20{year}")
-            papers.add(paper)
+            q = int(q_part)
 
-    return {
-        "months": sorted(months),
-        "papers": sorted(papers)
+        except:
+            continue
+
+        month_year = f"{month} 20{year}"
+
+        # ✅ Build nested structure
+        if month_year not in data:
+            data[month_year] = {}
+
+        if paper not in data[month_year]:
+            data[month_year][paper] = set()
+
+        data[month_year][paper].add(q)
+
+    return data
+
+
+# ✅ Endpoint: get full structure
+@app.get("/structure")
+def get_structure():
+
+    files = get_all_files()
+    structure = build_structure(files)
+
+    # Convert sets → sorted lists for JSON
+    clean = {
+        month: {
+            paper: sorted(list(qs))
+            for paper, qs in papers.items()
+        }
+        for month, papers in structure.items()
     }
 
+    return clean
 
-# ✅ Create Word file
+
+# ✅ Generate filename
+def find_image(paper, q):
+    return f"{paper}_Q{q}.png"
+
+
+# ✅ Word generation
 def create_word(entries, filename):
 
     doc = Document()
@@ -103,9 +149,7 @@ def create_word(entries, filename):
 
         doc.add_heading(f"{paper} — Q{q}", level=1)
 
-        img = find_image(paper, q)
-        url = f"{BASE_URL}/{img}"
-
+        url = f"{BASE_URL}/{paper}_Q{q}.png"
         response = requests.get(url)
 
         if response.status_code == 200:
@@ -116,7 +160,7 @@ def create_word(entries, filename):
     doc.save(filename)
 
 
-# ✅ Create PDF file
+# ✅ PDF generation
 def create_pdf(entries, filename):
 
     c = canvas.Canvas(filename, pagesize=A4)
@@ -125,10 +169,9 @@ def create_pdf(entries, filename):
 
     for paper, q in entries:
 
-        img = find_image(paper, q)
-        url = f"{BASE_URL}/{img}"
-
+        url = f"{BASE_URL}/{paper}_Q{q}.png"
         response = requests.get(url)
+
         if response.status_code != 200:
             continue
 
@@ -142,20 +185,16 @@ def create_pdf(entries, filename):
             c.showPage()
             y = height - 40
 
-        c.drawImage(
-            img_obj,
-            40,
-            y - new_h,
-            width=width - 80,
-            height=new_h
-        )
+        c.drawImage(img_obj, 40, y - new_h,
+                    width=width - 80,
+                    height=new_h)
 
         y -= new_h + 20
 
     c.save()
 
 
-# ✅ Main generate endpoint
+# ✅ Generate endpoint
 @app.post("/generate")
 def generate(data: RequestData):
 
@@ -169,7 +208,7 @@ def generate(data: RequestData):
     return FileResponse(filename, filename=filename)
 
 
-# ✅ Basic homepage (avoids 404)
+# ✅ Home route
 @app.get("/")
 def home():
     return {"message": "Worksheet Builder API is running"}
