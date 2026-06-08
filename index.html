@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Skills Map Exam Question Builder</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f8;
+            text-align: center;
+        }
+
+        .container {
+            width: 700px;
+            margin: auto;
+            margin-top: 50px;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
+        }
+
+        select {
+            margin: 5px;
+            padding: 8px;
+            width: 150px;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 10px;
+            background: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #005a9e;
+        }
+
+        #loginBox {
+            margin-top: 120px;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- ✅ LOGIN -->
+<div id="loginBox">
+    <h2>Worksheet Builder Login</h2>
+    <input type="password" id="password" placeholder="Enter password">
+    <br><br>
+    <button onclick="login()">Login</button>
+</div>
+
+<!-- ✅ APP -->
+<div class="container" id="app" style="display:none;">
+    <h1>Worksheet Builder</h1>
+
+    <div id="rows">Loading data...</div>
+
+    <button onclick="addRow()">Add Row</button>
+    <button onclick="generate()">Generate</button>
+
+    <br><br>
+
+    <label><input type="radio" name="type" value="word" checked> Word</label>
+    <label><input type="radio" name="type" value="pdf"> PDF</label>
+</div>
+
+<script>
+
+// ✅ CHANGE THIS
+const BASE_API = "https://exam-q-builder.onrender.com";
+
+// ✅ Login
+function login() {
+    const pw = document.getElementById("password").value;
+
+    if (pw === "maths123") {
+        document.getElementById("loginBox").style.display = "none";
+        document.getElementById("app").style.display = "block";
+        loadStructure();
+    } else {
+        alert("Incorrect password");
+    }
+}
+
+// ✅ Global data
+let structure = {};
+
+// ✅ Load structure from backend
+async function loadStructure() {
+
+    try {
+        const res = await fetch(`${BASE_API}/structure`);
+        structure = await res.json();
+
+        document.getElementById("rows").innerHTML = "";
+        addRow();
+
+    } catch (err) {
+        document.getElementById("rows").innerHTML = "Failed to load data.";
+        console.log(err);
+    }
+}
+
+// ✅ Add row
+function addRow() {
+
+    const div = document.createElement("div");
+
+    div.innerHTML = `
+        <select class="month"></select>
+        <select class="paper"></select>
+        <select class="question"></select>
+    `;
+
+    document.getElementById("rows").appendChild(div);
+
+    const monthSelect = div.querySelector(".month");
+    const paperSelect = div.querySelector(".paper");
+    const questionSelect = div.querySelector(".question");
+
+    // ✅ Populate months
+    const months = Object.keys(structure);
+    monthSelect.innerHTML = months.map(m => `<option>${m}</option>`).join("");
+
+    // ✅ Update papers when month changes
+    function updatePapers() {
+        const selectedMonth = monthSelect.value;
+        const papers = Object.keys(structure[selectedMonth] || {});
+
+        paperSelect.innerHTML = papers.map(p => `<option>${p}</option>`).join("");
+
+        updateQuestions();
+    }
+
+    // ✅ Update questions when paper changes
+    function updateQuestions() {
+        const selectedMonth = monthSelect.value;
+        const selectedPaper = paperSelect.value;
+
+        const questions = structure[selectedMonth][selectedPaper] || [];
+
+        questionSelect.innerHTML = questions.map(q => `<option>Q${q}</option>`).join("");
+    }
+
+    monthSelect.addEventListener("change", updatePapers);
+    paperSelect.addEventListener("change", updateQuestions);
+
+    updatePapers();
+}
+
+// ✅ Generate
+async function generate() {
+
+    const rows = document.querySelectorAll("#rows div");
+    let entries = [];
+
+    rows.forEach(row => {
+
+        const monthYear = row.querySelector(".month").value;
+        const paper = row.querySelector(".paper").value;
+        const q = row.querySelector(".question").value.replace("Q", "");
+
+        const parts = monthYear.split(" ");
+        const month = parts[0];
+        const year = parts[1].slice(-2);
+
+        const paperName = `${month} ${year} ${paper}`;
+
+        entries.push([paperName, parseInt(q)]);
+    });
+
+    const type = document.querySelector('input[name="type"]:checked').value;
+
+    try {
+        const response = await fetch(`${BASE_API}/generate`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({entries: entries, filetype: type})
+        });
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = type === "word" ? "worksheet.docx" : "worksheet.pdf";
+        a.click();
+
+    } catch (err) {
+        alert("Error generating file");
+        console.log(err);
+    }
+}
+
+</script>
+
+</body>
+</html>
