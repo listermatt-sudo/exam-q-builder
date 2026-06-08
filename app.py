@@ -24,28 +24,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Supabase config
-SUPABASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkY3dqcGtnZmZxbWF0c211cXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4ODMxMzksImV4cCI6MjA5NjQ1OTEzOX0.bpjgWe1ydbiIK2e9yOwESvMRLoK5c_lHljCpOM8q-3o"
-BUCKET = "question-images"
+# ✅ Supabase public URL
+BASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co/storage/v1/object/public/question-images"
 
-BASE_URL = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}"
 
-# ✅ Month mapping
-MONTH_MAP = {
-    "Jan": "January",
-    "Feb": "February",
-    "Mar": "March",
-    "Apr": "April",
-    "May": "May",
-    "Jun": "June",
-    "Jul": "July",
-    "Aug": "August",
-    "Sep": "September",
-    "Oct": "October",
-    "Nov": "November",
-    "Dec": "December"
-}
+# ✅ ALL SERIES YOU SPECIFIED
+MONTHS = [
+    "June 2025", "June 2024", "June 2023", "June 2022",
+    "June 2019", "June 2018", "June 2017",
+    "November 2025", "November 2024", "November 2023",
+    "November 2022", "November 2021",
+    "November 2019", "November 2018", "November 2017"
+]
+
+# ✅ ALL PAPERS
+PAPERS = ["1F", "2F", "3F", "1H", "2H", "3H"]
 
 
 # ✅ Request model
@@ -54,84 +47,60 @@ class RequestData(BaseModel):
     filetype: str
 
 
-# ✅ Fetch all files from Supabase
-def get_all_files():
+# ✅ ✅ CRITICAL: match your filename format exactly
+def build_filename(month_year, paper, q):
+    parts = month_year.split()
+    month = parts[0]
+    year = parts[1][-2:]
 
-    url = f"{SUPABASE_URL}/storage/v1/object/list/{BUCKET}"
+    # ✅ Convert November → Nov (YOUR FILE FORMAT)
+    if month == "November":
+        month = "Nov"
 
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    # ✅ IMPORTANT: send prefix = "" (root folder)
-    response = requests.post(
-        url,
-        headers=headers,
-        json={"prefix": ""}
-    )
-
-    if response.status_code != 200:
-        print("ERROR:", response.status_code, response.text)
-        return []
-
-    return response.json()
-
-# ✅ Build structured data
-def build_structure(files):
-
-    data = {}
-
-    for item in files:
-        name = item.get("name", "")
-
-        if "_Q" not in name:
-            continue
-
-        try:
-            paper_part, q_part = name.replace(".png", "").split("_Q")
-            parts = paper_part.split()
-
-            if len(parts) < 3:
-                continue
-
-            raw_month = parts[0]
-            month = MONTH_MAP.get(raw_month, raw_month)
-
-            year = parts[1]
-            paper = parts[2]
-
-            q = int(q_part)
-
-        except:
-            continue
-
-        month_year = f"{month} 20{year}"
-
-        # ✅ Build nested structure
-        if month_year not in data:
-            data[month_year] = {}
-
-        if paper not in data[month_year]:
-            data[month_year][paper] = set()
-
-        data[month_year][paper].add(q)
-
-    return data
+    return f"{month} {year} {paper}_Q{q}.png"
 
 
-# ✅ Endpoint: get full structure
+# ✅ ✅ Detect actual available questions
+def get_valid_questions(month_year, paper):
+
+    valid = []
+
+    # adjust range if needed
+    for q in range(1, 25):
+
+        filename = build_filename(month_year, paper, q)
+        url = f"{BASE_URL}/{filename}"
+
+        response = requests.head(url)
+
+        if response.status_code == 200:
+            valid.append(q)
+
+    return valid
+
+
+# ✅ ✅ MAIN STRUCTURE ENDPOINT
 @app.get("/structure")
 def get_structure():
 
-    files = get_all_files()
-    return {"debug": files}
+    structure = {}
 
+    for month in MONTHS:
 
-# ✅ Generate filename
-def find_image(paper, q):
-    return f"{paper}_Q{q}.png"
+        month_data = {}
+
+        for paper in PAPERS:
+
+            questions = get_valid_questions(month, paper)
+
+            if questions:
+                month_data[paper] = questions
+
+        # ✅ only include month if it has data
+        if month_data:
+            structure[month] = month_data
+
+    return structure
 
 
 # ✅ Word generation
@@ -180,9 +149,13 @@ def create_pdf(entries, filename):
             c.showPage()
             y = height - 40
 
-        c.drawImage(img_obj, 40, y - new_h,
-                    width=width - 80,
-                    height=new_h)
+        c.drawImage(
+            img_obj,
+            40,
+            y - new_h,
+            width=width - 80,
+            height=new_h
+        )
 
         y -= new_h + 20
 
