@@ -12,34 +12,88 @@ from reportlab.lib.utils import ImageReader
 import requests
 from io import BytesIO
 
-# ✅ Create FastAPI app
+# ✅ FastAPI app
 app = FastAPI()
 
-# ✅ ENABLE CORS (fixes your error)
+# ✅ Enable CORS (required for frontend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all (OK for local testing)
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Supabase base URL
-BASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co/storage/v1/object/public/question-images"
+# ✅ Supabase config
+SUPABASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkY3dqcGtnZmZxbWF0c211cXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4ODMxMzksImV4cCI6MjA5NjQ1OTEzOX0.bpjgWe1ydbiIK2e9yOwESvMRLoK5c_lHljCpOM8q-3o"
+BUCKET = "question-images"
+
+BASE_URL = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET}"
 
 
-# ✅ Request format from frontend
+# ✅ Request format
 class RequestData(BaseModel):
     entries: list
     filetype: str
 
 
-# ✅ Generate filename
+# ✅ Build image filename
 def find_image(paper, q):
     return f"{paper}_Q{q}.png"
 
 
-# ✅ Create Word document
+# ✅ Fetch file list from Supabase
+def get_all_files():
+
+    url = f"{SUPABASE_URL}/storage/v1/object/list/{BUCKET}"
+
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}"
+    }
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code != 200:
+        return []
+
+    return response.json()
+
+
+# ✅ Endpoint: get months + papers dynamically
+@app.get("/papers")
+def get_papers():
+
+    files = get_all_files()
+
+    months = set()
+    papers = set()
+
+    for item in files:
+        name = item.get("name", "")
+
+        if "_Q" not in name:
+            continue
+
+        paper_part = name.split("_Q")[0]
+        parts = paper_part.split()
+
+        if len(parts) >= 3:
+            month = parts[0]
+            year = parts[1]
+            paper = parts[2]
+
+            months.add(f"{month} 20{year}")
+            papers.add(paper)
+
+    return {
+        "months": sorted(months),
+        "papers": sorted(papers)
+    }
+
+
+# ✅ Create Word file
 def create_word(entries, filename):
 
     doc = Document()
@@ -62,7 +116,7 @@ def create_word(entries, filename):
     doc.save(filename)
 
 
-# ✅ Create PDF document
+# ✅ Create PDF file
 def create_pdf(entries, filename):
 
     c = canvas.Canvas(filename, pagesize=A4)
@@ -101,11 +155,10 @@ def create_pdf(entries, filename):
     c.save()
 
 
-# ✅ Main endpoint
+# ✅ Main generate endpoint
 @app.post("/generate")
 def generate(data: RequestData):
 
-    # ✅ Choose file type
     if data.filetype == "word":
         filename = "worksheet.docx"
         create_word(data.entries, filename)
@@ -113,9 +166,10 @@ def generate(data: RequestData):
         filename = "worksheet.pdf"
         create_pdf(data.entries, filename)
 
-    # ✅ Return file to browser
     return FileResponse(filename, filename=filename)
 
+
+# ✅ Basic homepage (avoids 404)
 @app.get("/")
 def home():
     return {"message": "Worksheet Builder API is running"}
