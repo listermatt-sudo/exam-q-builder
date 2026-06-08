@@ -24,11 +24,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Supabase public URL
+# ✅ Supabase storage base URL
 BASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co/storage/v1/object/public/question-images"
 
-
-# ✅ ALL SERIES YOU SPECIFIED
+# ✅ All series
 MONTHS = [
     "June 2025", "June 2024", "June 2023", "June 2022",
     "June 2019", "June 2018", "June 2017",
@@ -37,7 +36,7 @@ MONTHS = [
     "November 2019", "November 2018", "November 2017"
 ]
 
-# ✅ ALL PAPERS
+# ✅ All papers
 PAPERS = ["1F", "2F", "3F", "1H", "2H", "3H"]
 
 
@@ -47,66 +46,62 @@ class RequestData(BaseModel):
     filetype: str
 
 
-# ✅ ✅ CRITICAL: match your filename format exactly
+# ✅ Build filename to match Supabase
 def build_filename(month_year, paper, q):
     parts = month_year.split()
     month = parts[0]
     year = parts[1][-2:]
 
-    # ✅ Convert November → Nov (YOUR FILE FORMAT)
+    # ✅ Match your actual file naming
     if month == "November":
         month = "Nov"
 
     return f"{month} {year} {paper}_Q{q}.png"
 
 
-# ✅ ✅ Detect actual available questions
+# ✅ Detect real questions
 def get_valid_questions(month_year, paper):
 
     valid = []
 
-    # adjust range if needed
-    for q in range(1, 25):
+    for q in range(1, 25):  # adjust if needed
 
         filename = build_filename(month_year, paper, q)
         url = f"{BASE_URL}/{filename}"
 
-        response = requests.get(url)
+        try:
+            response = requests.get(url)
 
-        if response.status_code == 200:
-            valid.append(q)
+            if response.status_code == 200:
+                valid.append(q)
+
+        except:
+            continue
 
     return valid
 
 
-# ✅ ✅ MAIN STRUCTURE ENDPOINT
+# ✅ ✅ FINAL STRUCTURE ENDPOINT
 @app.get("/structure")
 def get_structure():
 
-    test_results = []
+    structure = {}
 
-    # Test a few known files directly
-    tests = [
-        ("June 2025", "1F", 1),
-        ("June 2025", "2F", 1),
-        ("November 2025", "1F", 1),
-        ("November 2025", "2H", 1),
-    ]
+    for month in MONTHS:
 
-    for month, paper, q in tests:
+        month_data = {}
 
-        filename = build_filename(month, paper, q)
-        url = f"{BASE_URL}/{filename}"
+        for paper in PAPERS:
 
-        response = requests.get(url)
+            questions = get_valid_questions(month, paper)
 
-        test_results.append({
-            "filename": filename,
-            "url": url,
-            "status": response.status_code
-        })
+            if questions:
+                month_data[paper] = questions
 
-    return test_results
+        if month_data:
+            structure[month] = month_data
+
+    return structure
 
 
 # ✅ Word generation
@@ -119,7 +114,8 @@ def create_word(entries, filename):
 
         doc.add_heading(f"{paper} — Q{q}", level=1)
 
-        url = f"{BASE_URL}/{paper}_Q{q}.png"
+        url = f"{BASE_URL}/{build_filename(paper.split()[0] + ' ' + paper.split()[1], paper.split()[-1], q)}"
+
         response = requests.get(url)
 
         if response.status_code == 200:
@@ -139,7 +135,8 @@ def create_pdf(entries, filename):
 
     for paper, q in entries:
 
-        url = f"{BASE_URL}/{paper}_Q{q}.png"
+        url = f"{BASE_URL}/{build_filename(paper.split()[0] + ' ' + paper.split()[1], paper.split()[-1], q)}"
+
         response = requests.get(url)
 
         if response.status_code != 200:
@@ -186,3 +183,4 @@ def generate(data: RequestData):
 @app.get("/")
 def home():
     return {"message": "Worksheet Builder API is running"}
+
