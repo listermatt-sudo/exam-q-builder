@@ -4,9 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from docx import Document
+from docx.shared import Inches
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
+
+from PIL import Image
 
 import requests
 from io import BytesIO
@@ -17,7 +20,7 @@ import os
 # ✅ FastAPI app
 app = FastAPI()
 
-# ✅ CORS (safe even if same-origin)
+# ✅ CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,7 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Supabase base URL
+# ✅ Image storage
 BASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co/storage/v1/object/public/question-images"
 
 
@@ -60,7 +63,7 @@ def build_base_name(month_year, paper, q):
     return f"{month} {year} {paper}_Q{q}"
 
 
-# ✅ Load all pages for a question
+# ✅ Load images (single + multi-page)
 def get_question_images(month_year, paper, q):
 
     base_name = build_base_name(month_year, paper, q)
@@ -77,7 +80,7 @@ def get_question_images(month_year, paper, q):
     except:
         pass
 
-    # ✅ Otherwise try multi-page versions
+    # ✅ Multi-page fallback
     page = 1
 
     while True:
@@ -111,7 +114,7 @@ def get_structure():
     return structure_cache
 
 
-# ✅ ✅ ✅ WORD EXPORT (FULL WIDTH + NARROW MARGINS)
+# ✅ ✅ ✅ WORD EXPORT (SMART FIT WIDTH + HEIGHT)
 def create_word(entries, filename):
 
     doc = Document()
@@ -138,22 +141,37 @@ def create_word(entries, filename):
 
         for img in images:
 
-            # ✅ Compute available width dynamically
             section = doc.sections[0]
-            available_width = (
-                section.page_width
-                - section.left_margin
-                - section.right_margin
-            )
 
-            doc.add_picture(img, width=available_width)
+            # ✅ Available space
+            max_width = section.page_width - section.left_margin - section.right_margin
+            max_height = section.page_height - section.top_margin - section.bottom_margin - Inches(1)
+
+            # ✅ Load image with PIL
+            image = Image.open(img)
+            img_width_px, img_height_px = image.size
+
+            # ✅ Convert px → inches (~96 dpi)
+            img_width_in = img_width_px / 96
+            img_height_in = img_height_px / 96
+
+            # ✅ Convert inches → EMU
+            img_width = img_width_in * 914400
+            img_height = img_height_in * 914400
+
+            # ✅ Scale to fit BOTH width and height
+            scale = min(max_width / img_width, max_height / img_height)
+
+            new_width = img_width * scale
+
+            doc.add_picture(img, width=new_width)
 
         doc.add_page_break()
 
     doc.save(filename)
 
 
-# ✅ PDF export (already well tuned)
+# ✅ PDF export (unchanged)
 def create_pdf(entries, filename):
 
     c = canvas.Canvas(filename, pagesize=A4)
