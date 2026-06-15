@@ -13,42 +13,16 @@ def serve_home():
     return FileResponse("index.html")
 
 
+import json
+
 @app.get("/structure")
 def get_structure():
 
     try:
-        bucket = "question-images"
+        with open("structure.json") as f:
+            data = json.load(f)
 
-        url = f"{SUPABASE_URL}/storage/v1/object/list/{bucket}"
-
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        res = requests.post(
-            url,
-            headers=headers,
-            json={"prefix": ""}
-        )
-
-        data = res.json()
-
-        if not isinstance(data, list):
-            return {"error": data}
-
-        result = []
-
-        for f in data:
-            file_url = f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{f['name']}"
-
-            result.append({
-                "name": f["name"],
-                "url": file_url
-            })
-
-        return result
+        return data
 
     except Exception as e:
         return {"error": str(e)}
