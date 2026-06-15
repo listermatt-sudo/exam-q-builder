@@ -16,13 +16,17 @@ def serve_home():
 @app.get("/structure")
 def get_structure():
 
-    url = f"{SUPABASE_URL}/rest/v1/structure"
+    try:
+        url = f"{SUPABASE_URL}/storage/v1/object/list/your-bucket-name"
 
-    headers = {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}"
-    }
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
 
-    res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers)
 
-    return res.json()
+        return res.json()
+
+    except Exception as e:
+        return {"error": str(e)}
