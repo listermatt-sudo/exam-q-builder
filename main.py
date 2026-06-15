@@ -17,21 +17,27 @@ def serve_home():
 def get_structure():
 
     try:
-        bucket = "question-images"  # ✅ CHANGE THIS
+        bucket = "question-images"  # ✅ FIX THIS
 
         url = f"{SUPABASE_URL}/storage/v1/object/list/{bucket}"
 
         headers = {
             "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}"
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json"
         }
 
         res = requests.get(url, headers=headers)
-        files = res.json()
+
+        data = res.json()
+
+        # ✅ If error returned, show it clearly
+        if isinstance(data, dict) and "error" in data:
+            return data
 
         result = []
 
-        for f in files:
+        for f in data:
             file_url = f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{f['name']}"
 
             result.append({
