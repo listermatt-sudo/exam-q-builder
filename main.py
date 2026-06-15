@@ -1,22 +1,25 @@
-from fastapi import FastAPI, UploadFile, File
-import shutil
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+import os
 
 app = FastAPI()
 
 
-@app.get("/")
-def home():
-    return {"status": "API running ✅"}
+@app.get("/", response_class=HTMLResponse)
+def run_script():
 
+    # ✅ run your existing script automatically
+    os.system("python markscheme_images.py")
 
-@app.post("/process")
-async def process_pdf(file: UploadFile = File(...)):
-
-    # save uploaded file
-    with open("input.pdf", "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # TODO: call your existing processing function here
-    # e.g. process_markscheme("input.pdf")
-
-    return {"message": "Processing complete ✅"}
+    return """
+    <html>
+        <head>
+            <title>Mark Scheme Processor</title>
+        </head>
+        <body>
+            <h1>✅ Processing Complete</h1>
+            <p>Your mark scheme has been processed.</p>
+            <p>Check the output images folder.</p>
+        </body>
+    </html>
+    """
