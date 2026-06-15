@@ -20,7 +20,7 @@ def serve_home():
     return FileResponse("index.html")
 
 
-# ✅ STRUCTURE (dropdown)
+# ✅ STRUCTURE
 @app.get("/structure")
 def get_structure():
     with open("structure.json") as f:
@@ -50,23 +50,22 @@ async def generate(request: Request):
         if month == "November":
             month = "Nov"
 
-        year = parts[1][-2:]   # ✅ 2025 → 25
+        year = parts[1][-2:]
         paper = parts[2]
 
         paper_fixed = f"{month} {year} {paper}"
         filename_base = f"{paper_fixed}_Q{q}"
 
-        # ✅ Build URLs
-        base_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '.png')}"
-
         images = []
 
-        # ✅ Try main image first
+        # ✅ Try base image first
+        base_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '.png')}"
         res = requests.get(base_url)
+
         if res.status_code == 200:
             images.append(res.content)
         else:
-            # ✅ Try multi-part (_1, _2, ...)
+            # ✅ Try multi-part images
             for i in range(1, 6):
                 part_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '_' + str(i) + '.png')}"
                 res = requests.get(part_url)
@@ -74,14 +73,14 @@ async def generate(request: Request):
                 if res.status_code == 200:
                     images.append(res.content)
 
-        # ✅ If nothing found, add placeholder (avoid silent skip)
+        # ✅ Handle missing images
         if not images:
             if filetype == "word":
                 doc.add_paragraph(f"MISSING: {paper_fixed} Q{q}")
             continue
 
         # =================
-        # ✅ WORD OUTPUT (FLOWING)
+        # ✅ WORD OUTPUT
         # =================
         if filetype == "word":
 
@@ -96,7 +95,7 @@ async def generate(request: Request):
             for img in images:
                 doc.add_picture(BytesIO(img), width=Inches(6))
 
-            doc.add_paragraph("")  # ✅ spacing only (NO page break)
+            doc.add_paragraph("")
 
         # =================
         # ✅ STORE FOR PDF
@@ -120,7 +119,7 @@ async def generate(request: Request):
         )
 
     # =================
-    # ✅ RETURN PDF (SMART LAYOUT)
+    # ✅ GENERATE PDF
     # =================
     if filetype == "pdf":
 
@@ -139,10 +138,12 @@ async def generate(request: Request):
             header = f"{paper_fixed}   Question {q}"
 
             header_height = 30
-            first_img_height = 350
 
             # ✅ Ensure header + first image stay together
-            if y - (header_height + first_img_height) < 50:
+            # (use estimated first image height)
+            est_img_height = 400
+
+            if y - (header_height + est_img_height) < 50:
                 c.showPage()
                 y = PAGE_HEIGHT - 40
 
@@ -155,10 +156,17 @@ async def generate(request: Request):
 
                 img = ImageReader(BytesIO(img_bytes))
 
-                img_width = 500
-                img_height = 350
+                # ✅ Get original size
+                orig_width, orig_height = img.getSize()
 
-                # ✅ If image doesn't fit → new page (repeat header)
+                # ✅ Scale to full page width
+                max_width = PAGE_WIDTH - 80
+                scale = max_width / orig_width
+
+                img_width = max_width
+                img_height = orig_height * scale
+
+                # ✅ If not enough space → new page (repeat header)
                 if y - img_height < 50:
                     c.showPage()
                     y = PAGE_HEIGHT - 40
@@ -169,7 +177,7 @@ async def generate(request: Request):
 
                 c.drawImage(
                     img,
-                    50,
+                    (PAGE_WIDTH - img_width) / 2,  # ✅ centred
                     y - img_height,
                     width=img_width,
                     height=img_height,
@@ -182,10 +190,3 @@ async def generate(request: Request):
             y -= 30  # spacing between questions
 
         c.save()
-        pdf_stream.seek(0)
-
-        return StreamingResponse(
-            pdf_stream,
-            media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=generated.pdf"}
-        )
