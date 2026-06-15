@@ -76,4 +76,3 @@ async def generate(request: Request):
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": "attachment; filename=generated.docx"}
     )
-``
