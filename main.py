@@ -46,7 +46,6 @@ async def generate(request: Request):
         parts = paper_name.split(" ")
         month = parts[0]
 
-        # ✅ Fix November naming
         if month == "November":
             month = "Nov"
 
@@ -58,43 +57,46 @@ async def generate(request: Request):
 
         images = []
 
-        # ✅ Try base image
         base_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '.png')}"
         res = requests.get(base_url)
 
         if res.status_code == 200:
             images.append(res.content)
         else:
-            # ✅ Try multi-part
             for i in range(1, 6):
                 part_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '_' + str(i) + '.png')}"
                 res = requests.get(part_url)
-
                 if res.status_code == 200:
                     images.append(res.content)
 
-        # ✅ Handle missing
         if not images:
             if filetype == "word":
                 doc.add_paragraph(f"MISSING: {paper_fixed} Q{q}")
             continue
 
         # =================
-        # ✅ WORD OUTPUT
+        # ✅ WORD OUTPUT (TABLE FIX)
         # =================
         if filetype == "word":
 
-            header = f"{paper_fixed}   Question {q}"
+            # ✅ Create table (forces Word to keep together)
+            table = doc.add_table(rows=1, cols=1)
+            cell = table.rows[0].cells[0]
 
-            p = doc.add_paragraph(header)
+            # ✅ Add header
+            p = cell.paragraphs[0]
+            run = p.add_run(f"{paper_fixed}   Question {q}")
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            p.runs[0].bold = True
+            run.bold = True
 
-            doc.add_paragraph("")
+            # ✅ spacing
+            cell.add_paragraph("")
 
+            # ✅ Add images inside same cell
             for img in images:
-                doc.add_picture(BytesIO(img), width=Inches(6))
+                cell.add_picture(BytesIO(img), width=Inches(6))
 
+            # ✅ spacing after
             doc.add_paragraph("")
 
         # =================
@@ -119,7 +121,7 @@ async def generate(request: Request):
         )
 
     # =================
-    # ✅ PDF RETURN (FULLY FIXED)
+    # ✅ PDF OUTPUT (FIXED HEADER DUPLICATION)
     # =================
     if filetype == "pdf":
 
@@ -138,8 +140,8 @@ async def generate(request: Request):
             header = f"{paper_fixed}   Question {q}"
             header_height = 30
 
-            # ✅ Ensure header + first image fit together
-            if y < 100:
+            # ✅ Ensure header + first image together
+            if y < 120:
                 c.showPage()
                 y = PAGE_HEIGHT - 40
 
@@ -150,25 +152,18 @@ async def generate(request: Request):
             for img_bytes in images:
 
                 img_reader = ImageReader(BytesIO(img_bytes))
-
-                # ✅ GET ORIGINAL SIZE
                 orig_width, orig_height = img_reader.getSize()
 
-                # ✅ SCALE TO PAGE WIDTH
                 max_width = PAGE_WIDTH - 80
                 scale = max_width / orig_width
 
                 img_width = max_width
                 img_height = orig_height * scale
 
-                # ✅ If doesn't fit → new page
+                # ✅ NEW PAGE (NO HEADER REPEAT)
                 if y - img_height < 50:
                     c.showPage()
                     y = PAGE_HEIGHT - 40
-
-                    c.setFont("Helvetica-Bold", 14)
-                    c.drawCentredString(PAGE_WIDTH / 2, y, header)
-                    y -= header_height
 
                 c.drawImage(
                     img_reader,
@@ -182,10 +177,7 @@ async def generate(request: Request):
 
             y -= 30
 
-        # ✅ CRITICAL: FINALISE PDF
         c.save()
-
-        # ✅ CRITICAL: RESET STREAM POSITION
         pdf_stream.seek(0)
 
         return StreamingResponse(
