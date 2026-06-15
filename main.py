@@ -27,7 +27,6 @@ def get_structure():
             "Content-Type": "application/json"
         }
 
-        # ✅ FIX: must use POST, not GET
         res = requests.post(
             url,
             headers=headers,
@@ -52,3 +51,4 @@ def get_structure():
         return result
 
     except Exception as e:
+        return {"error": str(e)}
