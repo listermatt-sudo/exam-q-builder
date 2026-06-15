@@ -17,7 +17,7 @@ def serve_home():
 def get_structure():
 
     try:
-        bucket = "question-images"  # ✅ FIX THIS
+        bucket = "question-images"
 
         url = f"{SUPABASE_URL}/storage/v1/object/list/{bucket}"
 
@@ -27,13 +27,17 @@ def get_structure():
             "Content-Type": "application/json"
         }
 
-        res = requests.get(url, headers=headers)
+        # ✅ FIX: must use POST, not GET
+        res = requests.post(
+            url,
+            headers=headers,
+            json={"prefix": ""}
+        )
 
         data = res.json()
 
-        # ✅ If error returned, show it clearly
-        if isinstance(data, dict) and "error" in data:
-            return data
+        if not isinstance(data, list):
+            return {"error": data}
 
         result = []
 
@@ -48,4 +52,3 @@ def get_structure():
         return result
 
     except Exception as e:
-        return {"error": str(e)}
