@@ -1,5 +1,8 @@
 fastapi
 uvicorn
-python-docx
-reportlab
-requests
+opencv-python
+pillow
+pdf2image
+pytesseract
+numpy
+python-multipart
