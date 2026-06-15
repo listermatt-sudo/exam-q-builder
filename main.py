@@ -1,13 +1,5 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-
-app = FastAPI()
-
-
-@app.get("/")
-def serve_home():
-    return FileResponse("index.html")
-from fastapi import FastAPI
 import requests
 
 app = FastAPI()
@@ -18,7 +10,6 @@ SUPABASE_KEY = "your-anon-key"
 
 @app.get("/")
 def serve_home():
-    from fastapi.responses import FileResponse
     return FileResponse("index.html")
 
 
