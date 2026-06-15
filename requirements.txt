@@ -7,3 +7,4 @@ pytesseract
 numpy
 python-multipart
 requests
+python-docx
