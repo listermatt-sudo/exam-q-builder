@@ -48,6 +48,10 @@ async def generate(request: Request):
         year = parts[1][-2:]
         paper = parts[2]
 
+    # ✅ Fix month abbreviations
+if month == "November":
+    month = "Nov"
+
         paper_fixed = f"{month} {year} {paper}"
         filename_base = f"{paper_fixed}_Q{q}"
 
