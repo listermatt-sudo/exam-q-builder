@@ -1,28 +1,62 @@
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import Request
+from fastapi.responses import StreamingResponse
+from docx import Document
+from docx.shared import Inches
+from io import BytesIO
 import requests
-
-app = FastAPI()
-
-SUPABASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdkY3dqcGtnZmZxbWF0c211cXJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4ODMxMzksImV4cCI6MjA5NjQ1OTEzOX0.bpjgWe1ydbiIK2e9yOwESvMRLoK5c_lHljCpOM8q-3o"
+import urllib.parse
 
 
-@app.get("/")
-def serve_home():
-    return FileResponse("index.html")
+BASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co/storage/v1/object/public/question-images"
 
 
-import json
+@app.post("/generate")
+async def generate(request: Request):
 
-@app.get("/structure")
-def get_structure():
+    data = await request.json()
+    entries = data["entries"]
+    filetype = data["filetype"]
 
-    try:
-        with open("structure.json") as f:
-            data = json.load(f)
+    doc = Document()
 
-        return data
+    for paper_name, q in entries:
 
-    except Exception as e:
-        return {"error": str(e)}
+        # paper_name example: "June 17 1F"
+        filename_base = f"{paper_name}_Q{q}"
+
+        images = []
+
+        # ✅ try single image first
+        urls = [f"{BASE_URL}/{urllib.parse.quote(filename_base + '.png')}"]
+
+        # ✅ then try multi-part versions
+        for i in range(1, 5):
+            multi = f"{filename_base}_{i}.png"
+            urls.append(f"{BASE_URL}/{urllib.parse.quote(multi)}")
+
+        # ✅ download images
+        for url in urls:
+            res = requests.get(url)
+            if res.status_code == 200:
+                images.append(res.content)
+
+        # ✅ add to doc
+        for img_bytes in images:
+            image_stream = BytesIO(img_bytes)
+            doc.add_picture(image_stream, width=Inches(6))
+
+        doc.add_paragraph("")  # spacing between questions
+
+    # ✅ save to memory
+    file_stream = BytesIO()
+    doc.save(file_stream)
+    file_stream.seek(0)
+
+    filename = "generated.docx" if filetype == "word" else "generated.docx"
+
+    return StreamingResponse(
+        file_stream,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+``
