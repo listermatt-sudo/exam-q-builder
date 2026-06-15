@@ -17,7 +17,9 @@ def serve_home():
 def get_structure():
 
     try:
-        url = f"{SUPABASE_URL}/storage/v1/object/list/question-images"
+        bucket = "question-images"  # ✅ CHANGE THIS
+
+        url = f"{SUPABASE_URL}/storage/v1/object/list/{bucket}"
 
         headers = {
             "apikey": SUPABASE_KEY,
@@ -25,8 +27,19 @@ def get_structure():
         }
 
         res = requests.get(url, headers=headers)
+        files = res.json()
 
-        return res.json()
+        result = []
+
+        for f in files:
+            file_url = f"{SUPABASE_URL}/storage/v1/object/public/{bucket}/{f['name']}"
+
+            result.append({
+                "name": f["name"],
+                "url": file_url
+            })
+
+        return result
 
     except Exception as e:
         return {"error": str(e)}
