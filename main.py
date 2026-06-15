@@ -17,7 +17,7 @@ def serve_home():
 def get_structure():
 
     try:
-        url = f"{SUPABASE_URL}/storage/v1/object/list/your-bucket-name"
+        url = f"{SUPABASE_URL}/storage/v1/object/list/question-images"
 
         headers = {
             "apikey": SUPABASE_KEY,
