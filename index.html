@@ -64,6 +64,11 @@
             background: #005a9e;
         }
 
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+
         .delete-btn {
             background: #d83b01;
         }
@@ -107,22 +112,24 @@
 
     <div id="rows">Loading...</div>
 
-  <!-- ✅ FULL WIDTH DIVIDER -->
-<hr style="margin: 20px 0 25px 0; width: 100%; border: none; border-top: 1px solid #e0e0e0;">
+    <hr style="margin: 20px 0 25px 0; width: 100%; border: none; border-top: 1px solid #e0e0e0;">
 
-<!-- ✅ ACTION BUTTONS -->
-<div>
-    <button onclick="addRow()">Add Row</button>
-    <button onclick="generate()">Generate</button>
-</div>
+    <div>
+        <button onclick="addRow()">Add Question</button>
+        <button id="generateBtn" onclick="generate()">Generate</button>
+    </div>
 
-<!-- ✅ LARGE GAP BELOW -->
-<div style="margin-top: 30px;">
-    <label><input type="radio" name="type" value="word" checked> Word</label>
-    <label><input type="radio" name="type" value="pdf"> PDF</label>
-</div>
+    <div id="status" style="margin-top:10px; font-weight:bold;"></div>
+
+    <div style="margin-top: 30px;">
+        <label><input type="radio" name="type" value="word" checked> Word</label>
+        <label><input type="radio" name="type" value="pdf"> PDF</label>
+    </div>
 
 <script>
+
+let isGenerating = false;  // ✅ safeguard
+
 
 function login() {
     const pw = document.getElementById("password").value;
@@ -155,218 +162,68 @@ async function loadStructure() {
 }
 
 
-// ✅ LOAD FROM EXCEL (NO DUPLICATES)
-function loadFromURL() {
-
-    const params = new URLSearchParams(window.location.search);
-    const data = params.get("data");
-
-    if (!data) return false;
-
-    const seen = new Set();
-
-    data.split(";").forEach(entry => {
-
-        if (!entry) return;
-
-        let [monthYear, paper, q] = entry.split("|");
-
-        if (!monthYear || !paper || !q) return;
-
-        if (monthYear.startsWith("Nov ")) {
-            monthYear = monthYear.replace("Nov", "November");
-        }
-
-        const key = `${monthYear}|${paper}|${q}`;
-        if (seen.has(key)) return;
-
-        seen.add(key);
-
-        addRowFromData(monthYear.trim(), paper.trim(), parseInt(q));
-    });
-
-    return true;
-}
-
-
-// ✅ ADD ROW
-function addRow() {
-    const div = createRow();
-    document.getElementById("rows").appendChild(div);
-    populateRow(div);
-}
-
-
-// ✅ CREATE ROW TEMPLATE
-function createRow() {
-
-    const div = document.createElement("div");
-    div.className = "row";
-    div.draggable = true;
-
-    div.innerHTML = `
-        <span class="drag-handle">☰</span>
-        <select class="month"></select>
-        <select class="paper"></select>
-        <select class="question"></select>
-        <button class="delete-btn">X</button>
-    `;
-
-    // ✅ Delete button
-    div.querySelector(".delete-btn").onclick = () => div.remove();
-
-    // ✅ Drag events
-    div.addEventListener("dragstart", () => {
-        div.classList.add("dragging");
-    });
-
-    div.addEventListener("dragend", () => {
-        div.classList.remove("dragging");
-    });
-
-    return div;
-}
-
-
-// ✅ POPULATE ROW
-function populateRow(div) {
-
-    const monthSelect = div.querySelector(".month");
-    const paperSelect = div.querySelector(".paper");
-    const questionSelect = div.querySelector(".question");
-
-    const months = Object.keys(structure).sort();
-    monthSelect.innerHTML = months.map(m => `<option>${m}</option>`).join("");
-
-    function updatePapers() {
-        const m = monthSelect.value;
-        let papers = Object.keys(structure[m] || {});
-
-        const order = ["1F","2F","3F","1H","2H","3H"];
-        papers.sort((a,b)=> order.indexOf(a)-order.indexOf(b));
-
-        paperSelect.innerHTML = papers.map(p => `<option>${p}</option>`).join("");
-        updateQuestions();
-    }
-
-    function updateQuestions() {
-        const qlist = structure[monthSelect.value]?.[paperSelect.value] || [];
-        questionSelect.innerHTML = qlist.map(q => `<option>Q${q}</option>`).join("");
-    }
-
-    monthSelect.addEventListener("change", updatePapers);
-    paperSelect.addEventListener("change", updateQuestions);
-
-    updatePapers();
-}
-
-
-// ✅ ADD ROW FROM EXCEL
-function addRowFromData(monthYear, paper, q) {
-
-    const div = createRow();
-    document.getElementById("rows").appendChild(div);
-
-    const monthSelect = div.querySelector(".month");
-    const paperSelect = div.querySelector(".paper");
-    const questionSelect = div.querySelector(".question");
-
-    const months = Object.keys(structure).sort();
-    monthSelect.innerHTML = months.map(m => `<option>${m}</option>`).join("");
-
-    monthSelect.value = monthYear;
-
-    function updatePapers() {
-        let papers = Object.keys(structure[monthYear] || {});
-        const order = ["1F","2F","3F","1H","2H","3H"];
-        papers.sort((a,b)=> order.indexOf(a)-order.indexOf(b));
-
-        paperSelect.innerHTML = papers.map(p => `<option>${p}</option>`).join("");
-        paperSelect.value = paper;
-
-        updateQuestions();
-    }
-
-    function updateQuestions() {
-        const qlist = structure[monthYear]?.[paper] || [];
-        questionSelect.innerHTML = qlist.map(x => `<option>Q${x}</option>`).join("");
-        questionSelect.value = "Q"+q;
-    }
-
-    updatePapers();
-}
-
-
-// ✅ DRAG + DROP LOGIC
-const container = document.getElementById("rows");
-
-container.addEventListener("dragover", e => {
-    e.preventDefault();
-    const afterElement = getDragAfterElement(container, e.clientY);
-    const dragging = document.querySelector(".dragging");
-
-    if (!dragging) return;
-
-    if (afterElement == null) {
-        container.appendChild(dragging);
-    } else {
-        container.insertBefore(dragging, afterElement);
-    }
-});
-
-function getDragAfterElement(container, y) {
-    const elements = [...container.querySelectorAll(".row:not(.dragging)")];
-
-    return elements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height/2;
-
-        if (offset < 0 && offset > closest.offset) {
-            return {offset, element: child};
-        } else {
-            return closest;
-        }
-    }, {offset: Number.NEGATIVE_INFINITY}).element;
-}
-
-
-// ✅ GENERATE
+// ✅ GENERATE (UPDATED WITH SAFEGUARD)
 async function generate() {
 
-    const rows = document.querySelectorAll("#rows .row");
-    let entries = [];
+    if (isGenerating) return;  // ✅ block multiple clicks
 
-    rows.forEach(row => {
-        const monthYear = row.querySelector(".month").value;
-        const paper = row.querySelector(".paper").value;
-        const q = row.querySelector(".question").value.replace("Q","");
+    const btn = document.getElementById("generateBtn");
+    const status = document.getElementById("status");
 
-        const parts = monthYear.split(" ");
-        const paperName = `${parts[0]} ${parts[1]} ${paper}`;
+    isGenerating = true;
+    btn.disabled = true;
+    btn.innerText = "Generating...";
+    status.innerText = "Building your document...";
 
-        entries.push([paperName, parseInt(q)]);
-    });
+    try {
 
-    const type = document.querySelector('input[name="type"]:checked').value;
+        const rows = document.querySelectorAll("#rows .row");
+        let entries = [];
 
-    const response = await fetch("/generate", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({entries: entries, filetype: type})
-    });
+        rows.forEach(row => {
+            const monthYear = row.querySelector(".month").value;
+            const paper = row.querySelector(".paper").value;
+            const q = row.querySelector(".question").value.replace("Q","");
 
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+            const parts = monthYear.split(" ");
+            const paperName = `${parts[0]} ${parts[1]} ${paper}`;
 
-    let filename = prompt("Enter file name:", "Skills Map Exam Practice");
-    if (!filename) filename = "Skills Map Exam Practice";
+            entries.push([paperName, parseInt(q)]);
+        });
 
-    const ext = type === "word" ? ".docx" : ".pdf";
+        const type = document.querySelector('input[name="type"]:checked').value;
 
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename + ext;
-    a.click();
+        const response = await fetch("/generate", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({entries: entries, filetype: type})
+        });
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        let filename = prompt("Enter file name:", "Skills Map Exam Practice");
+        if (!filename) filename = "Skills Map Exam Practice";
+
+        const ext = type === "word" ? ".docx" : ".pdf";
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename + ext;
+        a.click();
+
+        status.innerText = "✅ Download ready";
+
+    } catch (err) {
+
+        console.error(err);
+        status.innerText = "❌ Error generating file";
+
+    }
+
+    btn.disabled = false;
+    btn.innerText = "Generate";
+    isGenerating = false;
 }
 
 </script>
