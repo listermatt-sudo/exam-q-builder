@@ -113,64 +113,72 @@ if month == "November":
     # =================
     # ✅ PDF OUTPUT (SMART PAGINATION)
     # =================
-    if filetype == "pdf":
+   if filetype == "pdf":
 
-        from reportlab.pdfgen import canvas
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
 
-        pdf_stream = BytesIO()
-        c = canvas.Canvas(pdf_stream, pagesize=A4)
+    pdf_stream = BytesIO()
+    c = canvas.Canvas(pdf_stream, pagesize=A4)
 
-        PAGE_WIDTH, PAGE_HEIGHT = A4
+    PAGE_WIDTH, PAGE_HEIGHT = A4
 
-        y = PAGE_HEIGHT - 40  # start near top
+    y = PAGE_HEIGHT - 40
 
-        for paper_fixed, q, images in pdf_data:
+    for paper_fixed, q, images in pdf_data:
 
-            header = f"{paper_fixed}   Question {q}"
+        header = f"{paper_fixed}   Question {q}"
 
-            c.setFont("Helvetica-Bold", 14)
+        header_height = 30
+        first_img_height = 350
 
-            # ✅ Move to next page if header won't fit
-            if y < 100:
+        # ✅ CHECK SPACE BEFORE STARTING QUESTION
+        if y - (header_height + first_img_height) < 50:
+            c.showPage()
+            y = PAGE_HEIGHT - 40
+
+        # ✅ DRAW HEADER
+        c.setFont("Helvetica-Bold", 14)
+        c.drawCentredString(PAGE_WIDTH / 2, y, header)
+        y -= header_height
+
+        for img_bytes in images:
+
+            img = ImageReader(BytesIO(img_bytes))
+
+            img_height = 350
+            img_width = 500
+
+            # ✅ If this image won’t fit → new page
+            if y - img_height < 50:
                 c.showPage()
                 y = PAGE_HEIGHT - 40
 
-            c.drawCentredString(PAGE_WIDTH / 2, y, header)
-            y -= 30
+                # ✅ redraw header at top of new page
+                c.setFont("Helvetica-Bold", 14)
+                c.drawCentredString(PAGE_WIDTH / 2, y, header)
+                y -= header_height
 
-            for img_bytes in images:
+            c.drawImage(
+                img,
+                50,
+                y - img_height,
+                width=img_width,
+                height=img_height,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
 
-                img = ImageReader(BytesIO(img_bytes))
+            y -= (img_height + 20)
 
-                img_width = 500
-                img_height = 350  # adjustable
+        y -= 20  # spacing between questions
 
-                # ✅ If image won't fit → new page
-                if y - img_height < 50:
-                    c.showPage()
-                    y = PAGE_HEIGHT - 40
+    c.save()
+    pdf_stream.seek(0)
 
-                c.drawImage(
-                    img,
-                    50,
-                    y - img_height,
-                    width=img_width,
-                    height=img_height,
-                    preserveAspectRatio=True,
-                    mask='auto'
-                )
-
-                y -= (img_height + 20)
-
-            y -= 20  # spacing between questions
-
-        c.save()
-        pdf_stream.seek(0)
-
-        return StreamingResponse(
-            pdf_stream,
-            media_type="application/pdf",
-            headers={"Content-Disposition": "attachment; filename=generated.pdf"}
-        )
+    return StreamingResponse(
+        pdf_stream,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=generated.pdf"}
+    )
