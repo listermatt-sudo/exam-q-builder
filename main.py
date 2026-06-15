@@ -54,11 +54,12 @@ async def generate(request: Request):
             multi = f"{filename_base}_{i}.png"
             urls.append(f"{BASE_URL}/{urllib.parse.quote(multi)}")
 
-        # download images
-        for url in urls:
-            res = requests.get(url)
-            if res.status_code == 200:
-                images.append(res.content)
+for url in urls:
+    res = requests.get(url)
+    print("Trying:", url, "Status:", res.status_code)
+
+    if res.status_code == 200:
+        images.append(res.content)
 
         # insert images
         for img_bytes in images:
