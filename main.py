@@ -27,7 +27,7 @@ def get_structure():
         return json.load(f)
 
 
-# ✅ GENERATE DOCUMENT
+# ✅ GENERATE
 @app.post("/generate")
 async def generate(request: Request):
 
@@ -58,14 +58,14 @@ async def generate(request: Request):
 
         images = []
 
-        # ✅ Try base image first
+        # ✅ Try base image
         base_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '.png')}"
         res = requests.get(base_url)
 
         if res.status_code == 200:
             images.append(res.content)
         else:
-            # ✅ Try multi-part images
+            # ✅ Try multi-part
             for i in range(1, 6):
                 part_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '_' + str(i) + '.png')}"
                 res = requests.get(part_url)
@@ -73,7 +73,7 @@ async def generate(request: Request):
                 if res.status_code == 200:
                     images.append(res.content)
 
-        # ✅ Handle missing images
+        # ✅ Handle missing
         if not images:
             if filetype == "word":
                 doc.add_paragraph(f"MISSING: {paper_fixed} Q{q}")
@@ -104,7 +104,7 @@ async def generate(request: Request):
             pdf_data.append((paper_fixed, q, images))
 
     # =================
-    # ✅ RETURN WORD
+    # ✅ WORD RETURN
     # =================
     if filetype == "word":
 
@@ -119,7 +119,7 @@ async def generate(request: Request):
         )
 
     # =================
-    # ✅ GENERATE PDF
+    # ✅ PDF RETURN (FULLY FIXED)
     # =================
     if filetype == "pdf":
 
@@ -136,37 +136,32 @@ async def generate(request: Request):
         for paper_fixed, q, images in pdf_data:
 
             header = f"{paper_fixed}   Question {q}"
-
             header_height = 30
 
-            # ✅ Ensure header + first image stay together
-            # (use estimated first image height)
-            est_img_height = 400
-
-            if y - (header_height + est_img_height) < 50:
+            # ✅ Ensure header + first image fit together
+            if y < 100:
                 c.showPage()
                 y = PAGE_HEIGHT - 40
 
-            # ✅ Draw header
             c.setFont("Helvetica-Bold", 14)
             c.drawCentredString(PAGE_WIDTH / 2, y, header)
             y -= header_height
 
             for img_bytes in images:
 
-                img = ImageReader(BytesIO(img_bytes))
+                img_reader = ImageReader(BytesIO(img_bytes))
 
-                # ✅ Get original size
-                orig_width, orig_height = img.getSize()
+                # ✅ GET ORIGINAL SIZE
+                orig_width, orig_height = img_reader.getSize()
 
-                # ✅ Scale to full page width
+                # ✅ SCALE TO PAGE WIDTH
                 max_width = PAGE_WIDTH - 80
                 scale = max_width / orig_width
 
                 img_width = max_width
                 img_height = orig_height * scale
 
-                # ✅ If not enough space → new page (repeat header)
+                # ✅ If doesn't fit → new page
                 if y - img_height < 50:
                     c.showPage()
                     y = PAGE_HEIGHT - 40
@@ -176,17 +171,25 @@ async def generate(request: Request):
                     y -= header_height
 
                 c.drawImage(
-                    img,
-                    (PAGE_WIDTH - img_width) / 2,  # ✅ centred
+                    img_reader,
+                    (PAGE_WIDTH - img_width) / 2,
                     y - img_height,
                     width=img_width,
-                    height=img_height,
-                    preserveAspectRatio=True,
-                    mask='auto'
+                    height=img_height
                 )
 
                 y -= (img_height + 20)
 
-            y -= 30  # spacing between questions
+            y -= 30
 
+        # ✅ CRITICAL: FINALISE PDF
         c.save()
+
+        # ✅ CRITICAL: RESET STREAM POSITION
+        pdf_stream.seek(0)
+
+        return StreamingResponse(
+            pdf_stream,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=generated.pdf"}
+        )
