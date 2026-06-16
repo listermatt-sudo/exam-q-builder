@@ -94,7 +94,9 @@ async def generate(request: Request):
 
             # ✅ Add images inside same cell
             for img in images:
-                cell.add_picture(BytesIO(img), width=Inches(6))
+    p_img = cell.add_paragraph()
+    run = p_img.add_run()
+    run.add_picture(BytesIO(img), width=Inches(6))
 
             # ✅ spacing after
             doc.add_paragraph("")
