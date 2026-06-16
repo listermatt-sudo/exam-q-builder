@@ -73,30 +73,32 @@ async def generate(request: Request):
         # =================
         if filetype == "word":
 
-            table = doc.add_table(rows=1, cols=1)
-            row = table.rows[0]
-            cell = row.cells[0]
+    table = doc.add_table(rows=1, cols=1)
+    row = table.rows[0]
+    cell = row.cells[0]
 
-            # ✅ CRITICAL: prevent splitting across pages
-            row._element.get_or_add_trPr().append(
-                doc._element.xpath('//w:cantSplit')[0] 
-                if doc._element.xpath('//w:cantSplit') 
-                else doc._element.makeelement('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}cantSplit')
-            )
+    # ✅ CRITICAL: prevent row splitting across pages
+    tr = row._tr
+    trPr = tr.get_or_add_trPr()
+    
+    from docx.oxml import OxmlElement
+    cant_split = OxmlElement('w:cantSplit')
+    trPr.append(cant_split)
 
-            # Header
-            p = cell.paragraphs[0]
-            run = p.add_run(f"{paper_fixed}   Question {q}")
-            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-            run.bold = True
+    # ✅ HEADER
+    p = cell.paragraphs[0]
+    run = p.add_run(f"{paper_fixed}   Question {q}")
+    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    run.bold = True
 
-            # Images
-            for img in images:
-                paragraph = cell.add_paragraph()
-                run = paragraph.add_run()
-                run.add_picture(BytesIO(img), width=Inches(6))
+    # ✅ IMAGES
+    for img in images:
+        paragraph = cell.add_paragraph()
+        run = paragraph.add_run()
+        run.add_picture(BytesIO(img), width=Inches(6))
 
-            doc.add_paragraph("")
+    # ✅ minimal spacing (important)
+    doc.add_paragraph("")
 
         # =================
         # PDF DATA
