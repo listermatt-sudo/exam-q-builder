@@ -39,13 +39,14 @@ async def generate(request: Request):
     pdf_data = []
 
     # =================
-    # ✅ PROCESS QUESTIONS
+    # PROCESS QUESTIONS
     # =================
     for paper_name, q in entries:
 
         parts = paper_name.split(" ")
         month = parts[0]
 
+        # ✅ Fix month naming
         if month == "November":
             month = "Nov"
 
@@ -57,48 +58,48 @@ async def generate(request: Request):
 
         images = []
 
+        # ✅ Try main image
         base_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '.png')}"
         res = requests.get(base_url)
 
         if res.status_code == 200:
             images.append(res.content)
         else:
+            # ✅ Try multi-part images
             for i in range(1, 6):
                 part_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '_' + str(i) + '.png')}"
                 res = requests.get(part_url)
                 if res.status_code == 200:
                     images.append(res.content)
 
+        # ✅ Handle missing
         if not images:
             if filetype == "word":
                 doc.add_paragraph(f"MISSING: {paper_fixed} Q{q}")
             continue
 
         # =================
-        # ✅ WORD OUTPUT (TABLE FIX)
+        # ✅ WORD OUTPUT (FIXED)
         # =================
         if filetype == "word":
 
-            # ✅ Create table (forces Word to keep together)
+            # ✅ Table groups header + images
             table = doc.add_table(rows=1, cols=1)
             cell = table.rows[0].cells[0]
 
-            # ✅ Add header
+            # ✅ Header
             p = cell.paragraphs[0]
             run = p.add_run(f"{paper_fixed}   Question {q}")
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             run.bold = True
 
-            # ✅ spacing
-            cell.add_paragraph("")
-
-            # ✅ Add images inside same cell
+            # ✅ Images (CORRECT METHOD)
             for img in images:
-    p_img = cell.add_paragraph()
-    run = p_img.add_run()
-    run.add_picture(BytesIO(img), width=Inches(6))
+                paragraph = cell.add_paragraph()
+                run = paragraph.add_run()
+                run.add_picture(BytesIO(img), width=Inches(6))
 
-            # ✅ spacing after
+            # ✅ spacing after question
             doc.add_paragraph("")
 
         # =================
@@ -123,7 +124,7 @@ async def generate(request: Request):
         )
 
     # =================
-    # ✅ PDF OUTPUT (FIXED HEADER DUPLICATION)
+    # ✅ PDF RETURN (FIXED)
     # =================
     if filetype == "pdf":
 
@@ -147,6 +148,7 @@ async def generate(request: Request):
                 c.showPage()
                 y = PAGE_HEIGHT - 40
 
+            # ✅ Header
             c.setFont("Helvetica-Bold", 14)
             c.drawCentredString(PAGE_WIDTH / 2, y, header)
             y -= header_height
@@ -156,13 +158,14 @@ async def generate(request: Request):
                 img_reader = ImageReader(BytesIO(img_bytes))
                 orig_width, orig_height = img_reader.getSize()
 
+                # ✅ Scale to full width
                 max_width = PAGE_WIDTH - 80
                 scale = max_width / orig_width
 
                 img_width = max_width
                 img_height = orig_height * scale
 
-                # ✅ NEW PAGE (NO HEADER REPEAT)
+                # ✅ Page break if needed
                 if y - img_height < 50:
                     c.showPage()
                     y = PAGE_HEIGHT - 40
@@ -179,6 +182,7 @@ async def generate(request: Request):
 
             y -= 30
 
+        # ✅ FINALISE PDF
         c.save()
         pdf_stream.seek(0)
 
