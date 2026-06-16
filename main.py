@@ -14,20 +14,17 @@ SUPABASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co"
 BASE_URL = f"{SUPABASE_URL}/storage/v1/object/public/question-images"
 
 
-# ✅ HOME
 @app.get("/")
 def serve_home():
     return FileResponse("index.html")
 
 
-# ✅ STRUCTURE
 @app.get("/structure")
 def get_structure():
     with open("structure.json") as f:
         return json.load(f)
 
 
-# ✅ GENERATE
 @app.post("/generate")
 async def generate(request: Request):
 
@@ -38,15 +35,11 @@ async def generate(request: Request):
     doc = Document()
     pdf_data = []
 
-    # =================
-    # PROCESS QUESTIONS
-    # =================
     for paper_name, q in entries:
 
         parts = paper_name.split(" ")
         month = parts[0]
 
-        # ✅ Fix month naming
         if month == "November":
             month = "Nov"
 
@@ -58,58 +51,61 @@ async def generate(request: Request):
 
         images = []
 
-        # ✅ Try main image
         base_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '.png')}"
         res = requests.get(base_url)
 
         if res.status_code == 200:
             images.append(res.content)
         else:
-            # ✅ Try multi-part images
             for i in range(1, 6):
                 part_url = f"{BASE_URL}/{urllib.parse.quote(filename_base + '_' + str(i) + '.png')}"
                 res = requests.get(part_url)
                 if res.status_code == 200:
                     images.append(res.content)
 
-        # ✅ Handle missing
         if not images:
             if filetype == "word":
                 doc.add_paragraph(f"MISSING: {paper_fixed} Q{q}")
             continue
 
         # =================
-        # ✅ WORD OUTPUT (FIXED)
+        # ✅ WORD (FULL FIX)
         # =================
         if filetype == "word":
 
-            # ✅ Table groups header + images
             table = doc.add_table(rows=1, cols=1)
-            cell = table.rows[0].cells[0]
+            row = table.rows[0]
+            cell = row.cells[0]
 
-            # ✅ Header
+            # ✅ CRITICAL: prevent splitting across pages
+            row._element.get_or_add_trPr().append(
+                doc._element.xpath('//w:cantSplit')[0] 
+                if doc._element.xpath('//w:cantSplit') 
+                else doc._element.makeelement('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}cantSplit')
+            )
+
+            # Header
             p = cell.paragraphs[0]
             run = p.add_run(f"{paper_fixed}   Question {q}")
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             run.bold = True
 
-            # ✅ Images (CORRECT METHOD)
+            # Images
             for img in images:
                 paragraph = cell.add_paragraph()
                 run = paragraph.add_run()
                 run.add_picture(BytesIO(img), width=Inches(6))
 
-            # ✅ spacing after question
             doc.add_paragraph("")
 
         # =================
-        # ✅ STORE FOR PDF
+        # PDF DATA
         # =================
         if filetype == "pdf":
             pdf_data.append((paper_fixed, q, images))
 
     # =================
-    # ✅ WORD RETURN
+    # WORD RETURN
     # =================
     if filetype == "word":
 
@@ -124,7 +120,7 @@ async def generate(request: Request):
         )
 
     # =================
-    # ✅ PDF RETURN (FIXED)
+    # ✅ PDF (FULL BLOCK FIX)
     # =================
     if filetype == "pdf":
 
@@ -143,46 +139,48 @@ async def generate(request: Request):
             header = f"{paper_fixed}   Question {q}"
             header_height = 30
 
-            # ✅ Ensure header + first image together
-            if y < 120:
+            # ✅ PRE-CALCULATE WHOLE QUESTION HEIGHT
+            total_height = header_height
+
+            scaled = []
+
+            for img_bytes in images:
+                img_reader = ImageReader(BytesIO(img_bytes))
+                w, h = img_reader.getSize()
+
+                scale = (PAGE_WIDTH - 80) / w
+                new_h = h * scale
+
+                total_height += new_h + 20
+                scaled.append((img_reader, new_h))
+
+            total_height += 20
+
+            # ✅ IF WHOLE QUESTION DOESN’T FIT → NEW PAGE
+            if y - total_height < 50:
                 c.showPage()
                 y = PAGE_HEIGHT - 40
 
-            # ✅ Header
+            # ✅ DRAW HEADER
             c.setFont("Helvetica-Bold", 14)
             c.drawCentredString(PAGE_WIDTH / 2, y, header)
             y -= header_height
 
-            for img_bytes in images:
-
-                img_reader = ImageReader(BytesIO(img_bytes))
-                orig_width, orig_height = img_reader.getSize()
-
-                # ✅ Scale to full width
-                max_width = PAGE_WIDTH - 80
-                scale = max_width / orig_width
-
-                img_width = max_width
-                img_height = orig_height * scale
-
-                # ✅ Page break if needed
-                if y - img_height < 50:
-                    c.showPage()
-                    y = PAGE_HEIGHT - 40
+            # ✅ DRAW ALL IMAGES (NO BREAKS INSIDE QUESTION)
+            for img_reader, img_height in scaled:
 
                 c.drawImage(
                     img_reader,
-                    (PAGE_WIDTH - img_width) / 2,
+                    40,
                     y - img_height,
-                    width=img_width,
+                    width=PAGE_WIDTH - 80,
                     height=img_height
                 )
 
                 y -= (img_height + 20)
 
-            y -= 30
+            y -= 20
 
-        # ✅ FINALISE PDF
         c.save()
         pdf_stream.seek(0)
 
