@@ -5,6 +5,7 @@ import requests
 from docx import Document
 from docx.shared import Inches
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.oxml import OxmlElement
 from io import BytesIO
 import urllib.parse
 
@@ -14,17 +15,20 @@ SUPABASE_URL = "https://gdcwjpkgffqmatsmuqra.supabase.co"
 BASE_URL = f"{SUPABASE_URL}/storage/v1/object/public/question-images"
 
 
+# ✅ HOME
 @app.get("/")
 def serve_home():
     return FileResponse("index.html")
 
 
+# ✅ STRUCTURE
 @app.get("/structure")
 def get_structure():
     with open("structure.json") as f:
         return json.load(f)
 
 
+# ✅ GENERATE
 @app.post("/generate")
 async def generate(request: Request):
 
@@ -35,6 +39,9 @@ async def generate(request: Request):
     doc = Document()
     pdf_data = []
 
+    # =================
+    # PROCESS QUESTIONS
+    # =================
     for paper_name, q in entries:
 
         parts = paper_name.split(" ")
@@ -63,51 +70,50 @@ async def generate(request: Request):
                 if res.status_code == 200:
                     images.append(res.content)
 
+        # ✅ Missing handling
         if not images:
             if filetype == "word":
                 doc.add_paragraph(f"MISSING: {paper_fixed} Q{q}")
             continue
 
         # =================
-        # ✅ WORD (FULL FIX)
+        # ✅ WORD OUTPUT (FINAL FIX)
         # =================
         if filetype == "word":
 
-    table = doc.add_table(rows=1, cols=1)
-    row = table.rows[0]
-    cell = row.cells[0]
+            table = doc.add_table(rows=1, cols=1)
+            row = table.rows[0]
+            cell = row.cells[0]
 
-    # ✅ CRITICAL: prevent row splitting across pages
-    tr = row._tr
-    trPr = tr.get_or_add_trPr()
-    
-    from docx.oxml import OxmlElement
-    cant_split = OxmlElement('w:cantSplit')
-    trPr.append(cant_split)
+            # ✅ CRITICAL: Prevent row splitting across pages
+            tr = row._tr
+            trPr = tr.get_or_add_trPr()
+            cant_split = OxmlElement('w:cantSplit')
+            trPr.append(cant_split)
 
-    # ✅ HEADER
-    p = cell.paragraphs[0]
-    run = p.add_run(f"{paper_fixed}   Question {q}")
-    p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
-    run.bold = True
+            # ✅ HEADER
+            p = cell.paragraphs[0]
+            run = p.add_run(f"{paper_fixed}   Question {q}")
+            p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            run.bold = True
 
-    # ✅ IMAGES
-    for img in images:
-        paragraph = cell.add_paragraph()
-        run = paragraph.add_run()
-        run.add_picture(BytesIO(img), width=Inches(6))
+            # ✅ IMAGES (correct method)
+            for img in images:
+                paragraph = cell.add_paragraph()
+                run = paragraph.add_run()
+                run.add_picture(BytesIO(img), width=Inches(6))
 
-    # ✅ minimal spacing (important)
-    doc.add_paragraph("")
+            # ✅ spacing after table (minimal)
+            doc.add_paragraph("")
 
         # =================
-        # PDF DATA
+        # ✅ STORE FOR PDF
         # =================
         if filetype == "pdf":
             pdf_data.append((paper_fixed, q, images))
 
     # =================
-    # WORD RETURN
+    # ✅ WORD RETURN
     # =================
     if filetype == "word":
 
@@ -122,7 +128,7 @@ async def generate(request: Request):
         )
 
     # =================
-    # ✅ PDF (FULL BLOCK FIX)
+    # ✅ PDF OUTPUT (FULL BLOCK LOGIC)
     # =================
     if filetype == "pdf":
 
@@ -141,9 +147,8 @@ async def generate(request: Request):
             header = f"{paper_fixed}   Question {q}"
             header_height = 30
 
-            # ✅ PRE-CALCULATE WHOLE QUESTION HEIGHT
+            # ✅ Calculate full block height
             total_height = header_height
-
             scaled = []
 
             for img_bytes in images:
@@ -158,19 +163,18 @@ async def generate(request: Request):
 
             total_height += 20
 
-            # ✅ IF WHOLE QUESTION DOESN’T FIT → NEW PAGE
+            # ✅ Move whole question if needed
             if y - total_height < 50:
                 c.showPage()
                 y = PAGE_HEIGHT - 40
 
-            # ✅ DRAW HEADER
+            # ✅ Header
             c.setFont("Helvetica-Bold", 14)
             c.drawCentredString(PAGE_WIDTH / 2, y, header)
             y -= header_height
 
-            # ✅ DRAW ALL IMAGES (NO BREAKS INSIDE QUESTION)
+            # ✅ Images
             for img_reader, img_height in scaled:
-
                 c.drawImage(
                     img_reader,
                     40,
@@ -178,7 +182,6 @@ async def generate(request: Request):
                     width=PAGE_WIDTH - 80,
                     height=img_height
                 )
-
                 y -= (img_height + 20)
 
             y -= 20
