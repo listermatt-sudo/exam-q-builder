@@ -93,7 +93,7 @@ async def generate(request: Request):
 
             # ✅ HEADER
             p = cell.paragraphs[0]
-            run = p.add_run(f"{paper_fixed}   Question {q}")
+            run = p.add_run(f"{paper_fixed} Question {q}")
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             run.bold = True
 
@@ -144,7 +144,7 @@ async def generate(request: Request):
 
         for paper_fixed, q, images in pdf_data:
 
-            header = f"{paper_fixed}   Question {q}"
+            header = f"{paper_fixed} Question {q}"
             header_height = 30
 
             # ✅ Calculate full block height
