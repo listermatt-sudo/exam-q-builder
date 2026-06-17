@@ -8,6 +8,7 @@ from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import OxmlElement
 from io import BytesIO
 import urllib.parse
+from PIL import Image  # ✅ for dynamic sizing
 
 app = FastAPI()
 
@@ -39,9 +40,6 @@ async def generate(request: Request):
     doc = Document()
     pdf_data = []
 
-    # =================
-    # PROCESS QUESTIONS
-    # =================
     for paper_name, q in entries:
 
         parts = paper_name.split(" ")
@@ -70,14 +68,14 @@ async def generate(request: Request):
                 if res.status_code == 200:
                     images.append(res.content)
 
-        # ✅ Missing handling
+        # ✅ MISSING
         if not images:
             if filetype == "word":
                 doc.add_paragraph(f"MISSING: {paper_fixed} Q{q}")
             continue
 
         # =================
-        # ✅ WORD OUTPUT (FINAL FIX)
+        # ✅ WORD (FINAL VERSION)
         # =================
         if filetype == "word":
 
@@ -85,25 +83,40 @@ async def generate(request: Request):
             row = table.rows[0]
             cell = row.cells[0]
 
-            # ✅ CRITICAL: Prevent row splitting across pages
+            # ✅ Prevent split across pages
             tr = row._tr
             trPr = tr.get_or_add_trPr()
             cant_split = OxmlElement('w:cantSplit')
             trPr.append(cant_split)
 
-            # ✅ HEADER
+            # ✅ Header
             p = cell.paragraphs[0]
             run = p.add_run(f"{paper_fixed} Question {q}")
             p.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             run.bold = True
 
-            # ✅ IMAGES (correct method)
+            # ✅ Dynamic images
             for img in images:
                 paragraph = cell.add_paragraph()
                 run = paragraph.add_run()
-                run.add_picture(BytesIO(img), width=Inches(6))
 
-            # ✅ spacing after table (minimal)
+                image_stream = BytesIO(img)
+                pil_img = Image.open(image_stream)
+
+                orig_width, orig_height = pil_img.size
+                dpi = pil_img.info.get("dpi", (96, 96))[0]
+
+                width_in_inches = orig_width / dpi
+
+                max_width_inches = 6.5  # ✅ page-fit width
+                scale = min(1, max_width_inches / width_in_inches)
+
+                final_width = width_in_inches * scale
+
+                image_stream.seek(0)
+
+                run.add_picture(image_stream, width=Inches(final_width))
+
             doc.add_paragraph("")
 
         # =================
@@ -113,7 +126,7 @@ async def generate(request: Request):
             pdf_data.append((paper_fixed, q, images))
 
     # =================
-    # ✅ WORD RETURN
+    # ✅ WORD OUTPUT
     # =================
     if filetype == "word":
 
@@ -128,7 +141,7 @@ async def generate(request: Request):
         )
 
     # =================
-    # ✅ PDF OUTPUT (FULL BLOCK LOGIC)
+    # ✅ PDF OUTPUT (FINAL)
     # =================
     if filetype == "pdf":
 
@@ -147,7 +160,6 @@ async def generate(request: Request):
             header = f"{paper_fixed} Question {q}"
             header_height = 30
 
-            # ✅ Calculate full block height
             total_height = header_height
             scaled = []
 
